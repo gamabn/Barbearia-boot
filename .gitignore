@@ -1,0 +1,26 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+.next
+dist
+node_modules/
+.env
+# Sessão do Baileys (NUNCA commitar!)
+auth_info/
+auth_info_baileys/
+sessions/
+.baileys/
+
+
+# Cobertura de testes
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema
+.DS_Store
+Thumbs.db

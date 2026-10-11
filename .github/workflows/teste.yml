@@ -1,0 +1,41 @@
+name: Test & Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  quality-check:
+    name: Lint, Type-Check, Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Type-check
+        run: npx tsc --noEmit --if-present
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Rodar testes unitários
+        run: npm test
+        env:
+          NODE_ENV: test
+          # Impede que o Baileys tente conectar no CI
+          SKIP_BAILEYS_CONNECT: "true"
