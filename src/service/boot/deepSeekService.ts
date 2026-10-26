@@ -1,4 +1,5 @@
-import type strict from "node:assert/strict";
+{
+  /*import type strict from "node:assert/strict";
 import OpenAI from "openai";
 
 class DeepSeekService {
@@ -24,4 +25,5 @@ class DeepSeekService {
     return response.choices[0]?.message?.content || "";
   }
 }
-export { DeepSeekService };
+export { DeepSeekService };*/
+}

@@ -12,6 +12,7 @@ auth_info/
 auth_info_baileys/
 sessions/
 .baileys/
+auth_info_sessoes/
 
 
 # Cobertura de testes
@@ -23,4 +24,5 @@ npm-debug.log*
 
 # Sistema
 .DS_Store
+
 Thumbs.db

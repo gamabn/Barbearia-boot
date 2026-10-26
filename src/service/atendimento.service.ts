@@ -1,58 +1,31 @@
 import {
   type Barbeiro,
-  type Duracao,
+  //type Duracao,
   type Servico,
   type Sessao,
+  // type Agendamento,
 } from "../type/type.js";
-import { obterConfiguracao } from "../lib/obterConfiguraca.js";
+//import { obterConfiguracao } from "../lib/obterConfiguraca.js";
+import { consultarBarbeiros } from "./responseApi/consultarBarbeiros.js";
+import { consultarServicos } from "./responseApi/consultarServiços.js";
+import { formatarDuracao, formatarPreco } from "./responseApi/format.js";
+import { calcularHorariosDisponiveis } from "./responseApi/calcularHorariosDisponiveis.js";
+import { Agendar } from "./responseApi/agendarService.js";
+//import { consultarAgendamentos } from "./responseApi/consultarAgendamentos.js";
+import { consultarAgendamentosWhatsApp } from "./responseApi/consultarAgendamentosWhatsApp.js";
+//import { Barbearia } from "./atendimento.service.js";
+///export { Barbearia } from "./responseApi/consultarBarbearia.js"
+//import { type BarbeariaType } from "../type/type.js";
+
 const sessoes = new Map<string, Sessao>();
 
-async function consultarBarbeiros(): Promise<Barbeiro[]> {
-  const { apiUrl, barbeariaId, urlHost } = obterConfiguracao();
+//const consultarBarbearia = new Barbearia()
 
-  const resposta = await fetch(`${urlHost}/barber/many/${barbeariaId}`);
+//const barbeiro: BarbeariaType = consultarBarbearia.consultar(barbeariaId)
 
-  if (!resposta.ok) {
-    throw new Error(`Erro ao consultar barbeiros: HTTP ${resposta.status}`);
-  }
-
-  return (await resposta.json()) as Barbeiro[];
-}
-
-async function consultarServicos(barbeiroId: string): Promise<Servico[]> {
-  const { apiUrl } = obterConfiguracao();
-
-  const resposta = await fetch(`${apiUrl}/service/${barbeiroId}`);
-
-  if (!resposta.ok) {
-    throw new Error(`Erro ao consultar serviços: HTTP ${resposta.status}`);
-  }
-
-  return (await resposta.json()) as Servico[];
-}
-
-function formatarDuracao(duracao: Duracao): string {
-  const minutos = (duracao.hours ?? 0) * 60 + (duracao.minutes ?? 0);
-
-  if (minutos === 0) return "Duração não informada";
-  if (minutos < 60) return `${minutos} min`;
-
-  const horas = Math.floor(minutos / 60);
-  const resto = minutos % 60;
-
-  return resto > 0 ? `${horas}h ${resto}min` : `${horas}h`;
-}
-
-function formatarPreco(preco: string | number): string {
-  return Number(preco).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
-function menuPrincipal(): string {
+function menuPrincipal(nomeBarbearia: string): string {
   return [
-    "Olá! 👋 Bem-vindo à nossa barbearia!",
+    `Olá! 👋 Bem-vindo à ${nomeBarbearia}!`,
     "",
     "Como posso ajudar?",
     "",
@@ -106,30 +79,48 @@ function listarServicos(
 export async function processarMensagem(
   telefone: string,
   mensagem: string,
+  clienteId: string | undefined,
+  clientePhone: string | undefined,
+  barbeariaId: string,
+  nomeBarbearia: string,
 ): Promise<string> {
   const texto = mensagem.trim();
+
   const normalizado = texto.toLowerCase();
-  let sessao = sessoes.get(telefone);
+
+  //const sessao = sessoes.get(telefone);
+
+  const chaveSessao = `${barbeariaId}:${telefone}`;
+
+  const sessao = sessoes.get(chaveSessao);
+
+  const clienteIdAtual = clienteId ?? sessao?.clienteId;
+
+  if (sessao && clienteIdAtual) {
+    sessao.clienteId = clienteIdAtual;
+    sessoes.set(chaveSessao, sessao);
+  }
 
   if (/^(oi|olá|ola|bom dia|boa tarde|boa noite|menu)$/i.test(normalizado)) {
-    sessoes.set(telefone, {
+    sessoes.set(chaveSessao, {
       etapa: "menu",
+      ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
       barbeiros: [],
       servicos: [],
     });
 
-    return menuPrincipal();
+    return menuPrincipal(nomeBarbearia);
   }
 
   if (normalizado === "barbeiros") {
     try {
-      const barbeiros = await consultarBarbeiros();
+      const barbeiros = await consultarBarbeiros(barbeariaId);
 
       if (barbeiros.length === 0) {
         return "Não encontrei barbeiros cadastrados. Digite MENU para voltar.";
       }
 
-      sessoes.set(telefone, {
+      sessoes.set(chaveSessao, {
         etapa: "escolher_barbeiro",
         barbeiros,
         servicos: [],
@@ -142,16 +133,21 @@ export async function processarMensagem(
     }
   }
 
-  if (normalizado === "1" || normalizado === "2") {
+  if (
+    (normalizado === "1" || normalizado === "2") &&
+    (!sessao || sessao.etapa === "menu")
+  ) {
     try {
-      const barbeiros = await consultarBarbeiros();
+      const barbeiros = await consultarBarbeiros(barbeariaId);
 
       if (barbeiros.length === 0) {
         return "Não há barbeiros cadastrados nesta barbearia.";
       }
 
-      sessoes.set(telefone, {
+      sessoes.set(chaveSessao, {
         etapa: "escolher_barbeiro",
+        ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
+        modo: normalizado === "1" ? "agendamento" : "consulta",
         barbeiros,
         servicos: [],
       });
@@ -168,22 +164,23 @@ export async function processarMensagem(
     }
   }
 
-  if (normalizado === "3") {
-    return "📅 A consulta dos seus agendamentos será conectada na próxima etapa.\n\nDigite MENU para voltar.";
-  }
+  // if (normalizado === "3" && (!sessao || sessao.etapa === "menu")) {
+  // return "📅 A consulta dos seus agendamentos será conectada na próxima etapa.\n\nDigite MENU para voltar.";
+  //}
 
-  if (normalizado === "4") {
-    return "❌ O cancelamento será conectado ao sistema na próxima etapa.\n\nDigite MENU para voltar.";
-  }
+  //if (normalizado === "3" && (!sessao || sessao.etapa === "menu")) {
+  //  return "❌ O cancelamento será conectado ao sistema na próxima etapa.\n\nDigite MENU para voltar.";
+  // }
 
-  if (normalizado === "5") {
-    sessoes.set(telefone, {
+  if (normalizado === "5" && (!sessao || sessao.etapa === "menu")) {
+    sessoes.set(chaveSessao, {
+      ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
       etapa: "atendente",
       barbeiros: [],
       servicos: [],
     });
 
-    return "👋 Você solicitou atendimento humano. A integração para encaminhar a conversa será implementada na próxima etapa.";
+    return "👋 Você solicitou atendimento humano. Digite MENU para voltar.";
   }
 
   if (!sessao) {
@@ -212,12 +209,12 @@ export async function processarMensagem(
     }
 
     try {
-      const servicos = await consultarServicos(barbeiro.id);
+      const servicos = await consultarServicos(barbeiro.id, barbeariaId);
 
       sessao.barbeiro = barbeiro;
       sessao.servicos = servicos;
       sessao.etapa = "escolher_servico";
-      sessoes.set(telefone, sessao);
+      sessoes.set(chaveSessao, sessao);
 
       return listarServicos(barbeiro, servicos);
     } catch (erro) {
@@ -228,10 +225,11 @@ export async function processarMensagem(
 
   if (sessao.etapa === "escolher_servico" && normalizado === "barbeiros") {
     try {
-      const barbeiros = await consultarBarbeiros();
+      const barbeiros = await consultarBarbeiros(barbeariaId);
 
-      sessoes.set(telefone, {
+      sessoes.set(chaveSessao, {
         etapa: "escolher_barbeiro",
+        ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
         barbeiros,
         servicos: [],
       });
@@ -260,15 +258,315 @@ export async function processarMensagem(
       return "Serviço não encontrado. Digite MENU para recomeçar.";
     }
 
+    {
+      /* if (sessao.modo === "agendamento") {
+      return [
+        `Você escolheu ${servico.name}.`,
+        `💰 Valor: ${formatarPreco(servico.price)}`,
+        `⏱️ Duração: ${formatarDuracao(servico.duration)}`,
+        "",
+        "📅 Para qual dia você deseja agendar?",
+        "Digite a data no formato DD/MM/AAAA.",
+        "Exemplo: 12/10/2026",
+        "",
+        "Digite MENU para voltar.",
+      ].join("\n");
+    }*/
+    }
+
+    if (sessao.modo === "agendamento") {
+      sessao.servicoSelecionado = servico;
+      sessao.etapa = "escolher_data";
+
+      sessoes.set(chaveSessao, sessao);
+
+      return [
+        `Você escolheu ${servico.name}.`,
+        `💰 Valor: ${formatarPreco(servico.price)}`,
+        `⏱️ Duração: ${formatarDuracao(servico.duration)}`,
+        "",
+        "📅 Para qual dia você deseja agendar?",
+        "Digite a data no formato DD/MM/AAAA.",
+        "Exemplo: 12/10/2026",
+        "",
+        "Digite MENU para voltar.",
+      ].join("\n");
+    }
+
     return [
-      `Você escolheu ${servico.name}.`,
+      `💈 ${sessao.barbeiro?.name ?? "Barbeiro selecionado"}`,
+      `✂️ Serviço: ${servico.name}`,
       `💰 Valor: ${formatarPreco(servico.price)}`,
       `⏱️ Duração: ${formatarDuracao(servico.duration)}`,
       "",
-      "A consulta de serviços já está funcionando. Na próxima etapa, vamos consultar os horários disponíveis e concluir o agendamento.",
+      "Digite BARBEIROS para consultar outro profissional ou MENU para voltar.",
+    ].join("\n");
+  }
+
+  if (sessao.etapa === "escolher_data") {
+    //const partes = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const partes = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!partes) {
+      return "Informe a data no formato DD/MM/AAAA. Exemplo: 12/10/2026.";
+    }
+
+    const dia = Number(partes[1]);
+    const mes = Number(partes[2]);
+    const ano = Number(partes[3]);
+
+    const data = `${partes[3]}-${partes[2]}-${partes[1]}`;
+    const dataValidada = new Date(`${data}T12:00:00-03:00`);
+
+    if (
+      dataValidada.getFullYear() !== ano ||
+      dataValidada.getMonth() + 1 !== mes ||
+      dataValidada.getDate() !== dia
+    ) {
+      return "Essa data não é válida. Informe outra data no formato DD/MM/AAAA.";
+    }
+
+    if (!sessao.barbeiro || !sessao.servicoSelecionado) {
+      sessoes.set(chaveSessao, {
+        etapa: "menu",
+        barbeiros: [],
+        servicos: [],
+      });
+
+      return "Vamos recomeçar seu atendimento. Digite MENU.";
+    }
+
+    try {
+      const horarios = await calcularHorariosDisponiveis({
+        data,
+        barbeiro: sessao.barbeiro,
+        servico: sessao.servicoSelecionado,
+        barbeariaId,
+      });
+
+      if (horarios.length === 0) {
+        return [
+          "😕 Não encontrei horários disponíveis nessa data.",
+          "Informe outra data no formato DD/MM/AAAA.",
+        ].join("\n");
+      }
+
+      sessao.dataAgendamento = data;
+      sessao.horariosDisponiveis = horarios;
+      sessao.etapa = "escolher_horario";
+
+      sessoes.set(chaveSessao, sessao);
+
+      const listaHorarios: string[] = [];
+
+      for (let i = 0; i < horarios.length; i += 4) {
+        listaHorarios.push(horarios.slice(i, i + 4).join(" | "));
+      }
+
+      return [
+        `📅 Data: ${partes[1]}/${partes[2]}/${partes[3]}`,
+        `💈 Barbeiro: ${sessao.barbeiro.name}`,
+        `✂️ Serviço: ${sessao.servicoSelecionado.name}`,
+        "",
+        "🕒 Horários disponíveis:",
+        ...listaHorarios,
+        "",
+        "Digite o horário desejado, por exemplo: 09:30.",
+        "Digite MENU para voltar.",
+      ].join("\n");
+    } catch (erro) {
+      console.error("Erro ao calcular horários:", erro);
+      return "Não consegui consultar os horários agora. Tente novamente em instantes.";
+    }
+  }
+
+  if (sessao.etapa === "escolher_horario") {
+    const horarioInformado = texto.match(/^(\d{1,2}):(\d{2})$/);
+
+    if (!horarioInformado) {
+      return "Informe um horário válido, como 09:30.";
+    }
+
+    const horas = Number(horarioInformado[1]);
+    const minutos = Number(horarioInformado[2]);
+
+    if (horas > 23 || minutos > 59) {
+      return "Esse horário é inválido. Escolha um dos horários disponíveis.";
+    }
+
+    const horario = `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}`;
+
+    if (!sessao.horariosDisponiveis?.includes(horario)) {
+      return [
+        "Esse horário não está disponível para o serviço escolhido.",
+        "Escolha um dos horários que enviei anteriormente.",
+      ].join("\n");
+    }
+
+    sessao.horarioAgendamento = horario;
+    sessao.etapa = "confirmar_agendamento";
+
+    sessoes.set(chaveSessao, sessao);
+
+    const dataFormatada = sessao.dataAgendamento
+      ?.split("-")
+      .reverse()
+      .join("/");
+
+    return [
+      "Confira os dados do seu agendamento:",
       "",
+      `💈 Barbeiro: ${sessao.barbeiro?.name}`,
+      `✂️ Serviço: ${sessao.servicoSelecionado?.name}`,
+      `📅 Data: ${dataFormatada}`,
+      `🕒 Horário: ${horario}`,
+      `💰 Valor: ${formatarPreco(sessao.servicoSelecionado!.price)}`,
+      "",
+      "Digite SIM para confirmar agendamento.",
       "Digite MENU para voltar.",
-    ].join("\\n");
+    ].join("\n");
+  }
+
+  if (sessao.etapa === "confirmar_agendamento") {
+    if (normalizado === "não" || normalizado === "nao") {
+      sessoes.set(chaveSessao, {
+        etapa: "menu",
+        ...(sessao.clienteId ? { clienteId: sessao.clienteId } : {}),
+        barbeiros: [],
+        servicos: [],
+      });
+
+      return "Agendamento cancelado. Nenhum horário foi reservado.\n\nDigite MENU para ver as opções.";
+    }
+
+    if (normalizado !== "sim") {
+      return "Deseja confirmar o agendamento?\n\nResponda SIM para confirmar ou NÃO para desistir.";
+    }
+
+    const clienteIdFinal = clienteIdAtual ?? sessao.clienteId;
+    const barbeiro = sessao.barbeiro;
+    const servico = sessao.servicoSelecionado;
+    const data = sessao.dataAgendamento;
+    const horario = sessao.horarioAgendamento;
+
+    if (
+      !clienteIdFinal ||
+      !barbeiro ||
+      !servico ||
+      !data ||
+      !horario ||
+      !barbeariaId
+    ) {
+      console.error("Dados incompletos para confirmar agendamento:", {
+        clienteId: Boolean(clienteIdFinal),
+        barbeiro: Boolean(barbeiro),
+        servico: Boolean(servico),
+        data: Boolean(data),
+        horario: Boolean(horario),
+      });
+
+      return "Não consegui confirmar porque faltam dados do agendamento. Digite MENU e tente novamente.";
+    }
+
+    try {
+      const resultado = await Agendar({
+        barbeariaId,
+        data: {
+          client_id: clienteIdFinal,
+          barber_id: barbeiro.id,
+          date_agend: `${data}T${horario}:00-03:00`,
+          service_ids: [servico.id],
+          tipo: "AGENDAMENTO",
+        },
+      });
+
+      console.log("✅ Agendamento criado:", resultado);
+
+      sessoes.set(chaveSessao, {
+        etapa: "menu",
+        clienteId: clienteIdFinal,
+        barbeiros: [],
+        servicos: [],
+      });
+
+      return [
+        "✅ Agendamento confirmado com sucesso!",
+        "",
+        `💈 Barbeiro: ${barbeiro.name}`,
+        `✂️ Serviço: ${servico.name}`,
+        `📅 Data: ${data.split("-").reverse().join("/")}`,
+        `🕒 Horário: ${horario}`,
+        `💰 Valor: ${formatarPreco(servico.price)}`,
+        "",
+        "Obrigado por escolher nossa barbearia! 😊",
+        "Digite MENU para ver as opções.",
+      ].join("\n");
+    } catch (erro) {
+      console.error("❌ Erro ao confirmar agendamento:", erro);
+
+      const mensagem =
+        erro instanceof Error
+          ? erro.message
+          : "Erro desconhecido ao realizar agendamento.";
+
+      return `Não consegui confirmar o agendamento: ${mensagem}\n\nO horário não foi confirmado. Você pode tentar SIM novamente ou digitar MENU para sair.`;
+    }
+  }
+
+  if (normalizado === "3" && sessao?.etapa === "menu") {
+    if (!clientePhone) {
+      return "Não consegui identificar seu telefone. Tente novamente.";
+    }
+    console.log("telefone do cliente", clientePhone);
+    try {
+      const agendamentosCliente = await consultarAgendamentosWhatsApp(
+        clientePhone,
+        barbeariaId,
+      );
+
+      if (agendamentosCliente.length === 0) {
+        return "📅 Você não possui agendamentos cadastrados.\n\nDigite MENU para ver as opções disponíveis.";
+      }
+
+      const lista = agendamentosCliente.map((agend, index) => {
+        const data = new Date(agend.date_agend);
+
+        const dataFormatada = data.toLocaleDateString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+        });
+
+        const horarioFormatado = data.toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        const servicos = Array.isArray(agend.services)
+          ? agend.services.map((servico) => servico.name).join(", ")
+          : "Serviço não informado";
+
+        return [
+          `📌 Agendamento ${index + 1}`,
+          `📅 Data: ${dataFormatada}`,
+          `🕒 Horário: ${horarioFormatado}`,
+          `💈 Barbeiro: ${agend.barber_name}`,
+          `✂️ Serviço: ${servicos}`,
+          `💰 Valor: ${formatarPreco(agend.total_price)}`,
+          `📍 Status: ${agend.status}`,
+        ].join("\n");
+      });
+
+      return [
+        "📋 Seus agendamentos:",
+        "",
+        lista.join("\n\n"),
+        "",
+        "Digite MENU para voltar.",
+      ].join("\n");
+    } catch (erro) {
+      console.error("Erro ao consultar agendamentos:", erro);
+
+      return "Não consegui consultar seus agendamentos agora. Tente novamente em instantes.";
+    }
   }
 
   return "Digite MENU para ver as opções disponíveis.";
