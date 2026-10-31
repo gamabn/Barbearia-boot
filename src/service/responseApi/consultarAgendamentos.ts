@@ -25,14 +25,14 @@ export async function consultarAgendamentos(
   client_phone: string,
   barbeariaId: string,
 ): Promise<AgendamentoRetornado[]> {
-  const { urlHost } = obterConfiguracao();
+  const { urlHost, apiUrl } = obterConfiguracao();
 
   if (!client_phone || !barbeariaId) {
     throw new Error("Telefone ou ID da barbearia não informado.");
   }
 
   const response = await fetch(
-    `${urlHost}/agend/${encodeURIComponent(client_phone)}?barbeariaId=${encodeURIComponent(barbeariaId)}`,
+    `${apiUrl}/agend/${encodeURIComponent(client_phone)}?barbeariaId=${encodeURIComponent(barbeariaId)}`,
   );
 
   if (!response.ok) {

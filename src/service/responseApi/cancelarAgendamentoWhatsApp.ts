@@ -5,7 +5,7 @@ export async function cancelarAgendamentoWhatsApp(
   barbeariaId: string,
   clientePhone: string,
 ): Promise<void> {
-  const { urlHost } = obterConfiguracao();
+  const { urlHost, apiUrl } = obterConfiguracao();
   const token = process.env.BOT_SERVICE_TOKEN;
 
   if (!token) {
@@ -17,7 +17,7 @@ export async function cancelarAgendamentoWhatsApp(
   }
 
   const response = await fetch(
-    `${urlHost.replace(/\/$/, "")}/whatsapp/agendamentos/${encodeURIComponent(barbeariaId)}/${encodeURIComponent(agendamentoId)}`,
+    `${apiUrl.replace(/\/$/, "")}/whatsapp/agendamentos/${encodeURIComponent(barbeariaId)}/${encodeURIComponent(agendamentoId)}`,
     {
       method: "DELETE",
       headers: {

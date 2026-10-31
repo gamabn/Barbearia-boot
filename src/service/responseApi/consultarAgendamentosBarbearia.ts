@@ -4,14 +4,14 @@ import type { AgendamentoRetornado } from "./consultarAgendamentos.js";
 export async function consultarAgendamentosBarbearia(
   barbeariaId: string,
 ): Promise<AgendamentoRetornado[]> {
-  const { urlHost } = obterConfiguracao();
+  const { urlHost, apiUrl } = obterConfiguracao();
 
   if (!barbeariaId) {
     throw new Error("ID da barbearia não informado.");
   }
 
   const response = await fetch(
-    `${urlHost}/agendamento/${encodeURIComponent(barbeariaId)}`,
+    `${apiUrl}/agendamento/${encodeURIComponent(barbeariaId)}`,
   );
 
   if (!response.ok) {

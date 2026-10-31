@@ -7,7 +7,7 @@ interface AgendarParams {
 }
 
 export async function Agendar({ data, barbeariaId }: AgendarParams) {
-  const { urlHost } = obterConfiguracao();
+  const { apiUrl } = obterConfiguracao();
 
   if (!barbeariaId) {
     throw new Error("Não foi possível identificar a barbearia.");
@@ -29,7 +29,7 @@ export async function Agendar({ data, barbeariaId }: AgendarParams) {
     data: data.date_agend,
   });
 
-  const response = await fetch(`${urlHost}/agend`, {
+  const response = await fetch(`${apiUrl}/agend`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

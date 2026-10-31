@@ -13,7 +13,7 @@ export async function garantirCliente(
   nome: string,
   barbeariaId: string,
 ): Promise<Cliente> {
-  const { urlHost } = obterConfiguracao();
+  const { apiUrl } = obterConfiguracao();
 
   if (!barbeariaId) {
     throw new Error("Não foi possível identificar a barbearia.");
@@ -27,7 +27,7 @@ export async function garantirCliente(
 
   // 1. Consulta o cliente na barbearia correta
   const urlConsulta =
-    `${urlHost}/client_whatsapp/` +
+    `${apiUrl}/client_whatsapp/` +
     `${encodeURIComponent(barbeariaId)}/` +
     `${encodeURIComponent(telefoneLimpo)}`;
 
@@ -67,7 +67,7 @@ export async function garantirCliente(
   // 3. Cliente não encontrado: cadastra na barbearia correta
   console.log(`🆕 Cadastrando cliente na barbearia ${barbeariaId}`);
 
-  const cadastro = await fetch(`${urlHost}/client`, {
+  const cadastro = await fetch(`${apiUrl}/client`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

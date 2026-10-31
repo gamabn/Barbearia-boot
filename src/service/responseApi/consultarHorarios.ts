@@ -12,14 +12,14 @@ export type HorarioFuncionamento = {
 export async function consultarHorarios(
   barbeariaId: string,
 ): Promise<HorarioFuncionamento[]> {
-  const { urlHost } = obterConfiguracao();
+  const { urlHost, apiUrl } = obterConfiguracao();
 
   if (!barbeariaId) {
     throw new Error("ID da barbearia não informado.");
   }
 
   const response = await fetch(
-    `${urlHost}/horarios/${encodeURIComponent(barbeariaId)}`,
+    `${apiUrl}/horarios/${encodeURIComponent(barbeariaId)}`,
   );
 
   if (!response.ok) {

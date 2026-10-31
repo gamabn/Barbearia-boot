@@ -22,14 +22,14 @@ export async function consultarServicos(
   barbeiroId: string,
   barbeariaId: string,
 ): Promise<Servico[]> {
-  const { urlHost } = obterConfiguracao();
+  const { apiUrl } = obterConfiguracao();
 
   if (!barbeiroId || !barbeariaId) {
     throw new Error("ID do barbeiro ou da barbearia não informado.");
   }
 
   const resposta = await fetch(
-    `${urlHost}/service/${encodeURIComponent(barbeiroId)}`,
+    `${apiUrl}/service/${encodeURIComponent(barbeiroId)}`,
   );
 
   if (!resposta.ok) {

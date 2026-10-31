@@ -19,14 +19,14 @@ import { obterConfiguracao } from "../../lib/obterConfiguraca.js";
 export async function consultarBarbeiros(
   barbeariaId: string,
 ): Promise<Barbeiro[]> {
-  const { urlHost } = obterConfiguracao();
+  const { apiUrl } = obterConfiguracao();
 
   if (!barbeariaId) {
     throw new Error("ID da barbearia não informado.");
   }
 
   const resposta = await fetch(
-    `${urlHost}/barber/many/${encodeURIComponent(barbeariaId)}`,
+    `${apiUrl}/barber/many/${encodeURIComponent(barbeariaId)}`,
   );
 
   if (!resposta.ok) {
