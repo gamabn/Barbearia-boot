@@ -40,11 +40,23 @@ function validarBarbeariaId(id: string): void {
 
   return path.resolve("auth_info_sessoes", barbeariaId);
 }*/
-function obterDiretorioAuth(barbeariaId: string) {
+
+//====================================================================
+
+function obterDiretorioAuth(barbeariaId: string): string {
+  validarBarbeariaId(barbeariaId);
+
+  const pastaBase = process.env.WHATSAPP_AUTH_DIR || "auth_info_sessoes";
+
+  return path.resolve(pastaBase, barbeariaId);
+}
+//==========================Mudar depois ================================================
+/*function obterDiretorioAuth(barbeariaId: string) {
   validarBarbeariaId(barbeariaId);
 
   return path.resolve("auth_info_sessoes", barbeariaId);
-}
+}*/
+//==========================================================================
 
 export function listarSessoesWhatsApp() {
   return Array.from(sessoes.values()).map((sessao) => ({
@@ -385,200 +397,3 @@ export async function desconectarWhatsApp(barbeariaId: string): Promise<void> {
 }
 
 //=====================================================================
-
-/*import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState,
-} from "@whiskeysockets/baileys";
-import qrcode from "qrcode-terminal";
-import path from "node:path";
-import { processarMensagem } from "../atendimento.service.js";
-import { rm } from "node:fs/promises";
-import { garantirCliente } from "../responseApi/garantirCliente.js";
-
-type SessaoWhatsApp = {
-  barbeariaId: string;
-  authDirectory: string;
-  socket?: ReturnType<typeof makeWASocket>;
-  conectando: boolean;
-  reconexaoAgendada: boolean;
-}
-
-//const authDirectory = path.resolve("auth_info");
-const sessoes = new Map<string, SessaoWhatsApp>();
-
-const barbeariaTeste = process.env.BARBERSHOP_ID;
-
-export async function startWhatsApp(): Promise<void> {
-  const { state, saveCreds } = await useMultiFileAuthState(authDirectory);
-
-  const socket = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-  });
-
-  socket.ev.on("creds.update", saveCreds);
-
-  socket.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      console.log("\n📱 Escaneie este QR Code com o WhatsApp:\n");
-      qrcode.generate(qr, { small: true });
-    }
-
-    if (connection === "open") {
-      console.log("✅ WhatsApp conectado com sucesso!");
-    }
-
-    if (connection === "close") {
-      const statusCode = (
-        lastDisconnect?.error as {
-          output?: { statusCode?: number };
-        }
-      )?.output?.statusCode;
-
-      console.log("Código da desconexão:", statusCode);
-
-      if (statusCode === DisconnectReason.loggedOut) {
-        console.log("⚠️ Sessão revogada. Preparando novo QR Code...");
-
-        try {
-          await rm(authDirectory, {
-            recursive: true,
-            force: true,
-          });
-
-          console.log("🧹 Credenciais antigas removidas.");
-
-          setTimeout(() => {
-            void startWhatsApp().catch((error) => {
-              console.error("❌ Erro ao iniciar nova sessão:", error);
-            });
-          }, 1500);
-        } catch (error) {
-          console.error("❌ Erro ao limpar a sessão:", error);
-        }
-
-        return;
-      }
-
-      console.log("🔄 Conexão perdida. Tentando reconectar...");
-
-      setTimeout(() => {
-        void startWhatsApp().catch((error) => {
-          console.error("❌ Erro ao reconectar WhatsApp:", error);
-        });
-      }, 3000);
-    }
-  });
-
-  //==================================================================
-
-  socket.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
-
-    for (const message of messages) {
-      if (!message.message || message.key.fromMe) continue;
-
-      const remoteJid = message.key.remoteJid;
-
-      if (
-        !remoteJid ||
-        remoteJid === "status@broadcast" ||
-        remoteJid.endsWith("@g.us")
-      ) {
-        continue;
-      }
-
-      const texto =
-        message.message.conversation ??
-        message.message.extendedTextMessage?.text ??
-        message.message.imageMessage?.caption ??
-        "";
-
-      if (!texto.trim()) continue;
-
-      console.log(`📩 Mensagem recebida de ${remoteJid}: ${texto}`);
-
-      const chave = message.key as typeof message.key & {
-        remoteJidAlt?: string;
-      };
-
-      const identificadorTelefone = chave.remoteJidAlt?.endsWith(
-        "@s.whatsapp.net",
-      )
-        ? chave.remoteJidAlt
-        : remoteJid.endsWith("@s.whatsapp.net")
-          ? remoteJid
-          : null;
-
-      let clienteId: string | undefined;
-      let clientePhone: string | undefined;
-
-      try {
-        if (identificadorTelefone) {
-          const telefone = identificadorTelefone.split("@")[0] ?? "";
-          const nome = message.pushName?.trim() || "Cliente WhatsApp";
-          console.log("telefone  cadastrado", telefone);
-          const cliente = await garantirCliente(telefone, nome);
-
-          clienteId = cliente.id ?? cliente.client_id;
-          clientePhone = cliente.client_phone;
-
-          if (!clienteId) {
-            throw new Error("A API não retornou o ID do cliente.");
-          }
-
-          console.log(
-            "✅ Cliente identificado:",
-            cliente.id ?? cliente.client_id ?? "(ID não retornado)",
-          );
-        } else {
-          console.log(
-            "⚠️ Telefone não identificado; cadastro do cliente adiado.",
-          );
-        }
-
-        const resposta = await processarMensagem(
-          remoteJid,
-          texto,
-          clienteId ?? "",
-          clientePhone ?? "",
-        );
-
-        await socket.sendMessage(remoteJid, {
-          text: resposta,
-        });
-
-        console.log("✅ Resposta enviada.");
-      } catch (error) {
-        console.error("❌ Erro ao processar mensagem:", error);
-
-        try {
-          await socket.sendMessage(remoteJid, {
-            text: "Não consegui processar seu atendimento agora. Tente novamente em instantes.",
-          });
-        } catch (erroEnvio) {
-          console.error("❌ Erro ao enviar mensagem de erro:", erroEnvio);
-        }
-      }
-    }
-  });
-}*/
-//=======================================================================
-
-// try {
-///  const resposta = await processarMensagem(remoteJid, texto);
-
-//   await socket.sendMessage(remoteJid, {
-//    text: resposta,
-//   });
-
-//   console.log("✅ Resposta enviada.");
-// } catch (error) {
-//    console.error("❌ Erro ao responder mensagem:", error);
-//  }
-// }
-// });
-//}

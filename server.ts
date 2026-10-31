@@ -20,8 +20,8 @@ app.use(express.json());
 const httpServer = createServer(app);
 const PORT = Number(process.env.PORT) || 3003;
 //===============================================================
- //const barber =  new Barbearia()
- // export const barbeiro = barber.consultar()
+//const barber =  new Barbearia()
+// export const barbeiro = barber.consultar()
 //=========================================================================
 
 function autenticarBot(
@@ -69,7 +69,6 @@ app.delete(
         });
       }
 
- 
       await desconectarWhatsApp(barbeariaId);
 
       return res.status(200).json({
@@ -118,6 +117,10 @@ app.use(
     _next: express.NextFunction,
   ) => {
     console.error("Erro na API do bot:", error);
+
+    if (res.headersSent) {
+      return _next(error);
+    }
 
     res.status(500).json({
       erro:

@@ -1,3 +1,4 @@
+import type { AgendamentoRetornado } from "../service/responseApi/consultarAgendamentos.js";
 export type Barbeiro = {
   id: string;
   name: string;
@@ -17,20 +18,6 @@ export type Servico = {
   barber_id: string;
 };
 
-{
-  /*export type Sessao = {
-  etapa:
-    | "menu"
-    | "escolher_barbeiro"
-    | "servicos"
-    | "escolher_servico"
-    | "atendente";
-  barbeiros: Barbeiro[];
-  barbeiro?: Barbeiro;
-  servicos: Servico[];
-};*/
-}
-
 export type Sessao = {
   etapa:
     | "menu"
@@ -39,7 +26,8 @@ export type Sessao = {
     | "escolher_data"
     | "escolher_horario"
     | "confirmar_agendamento"
-    | "atendente";
+    | "escolher_cancelamento"
+    | "confirmar_cancelamento";
 
   modo?: "agendamento" | "consulta";
   clienteId?: string;
@@ -52,6 +40,10 @@ export type Sessao = {
   dataAgendamento?: string;
   horariosDisponiveis?: string[];
   horarioAgendamento?: string;
+
+  agendamentosCancelamento?: AgendamentoRetornado[];
+
+  agendamentoCancelarId?: string;
 };
 
 export type Agendamento = {

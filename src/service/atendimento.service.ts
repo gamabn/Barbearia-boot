@@ -13,6 +13,7 @@ import { calcularHorariosDisponiveis } from "./responseApi/calcularHorariosDispo
 import { Agendar } from "./responseApi/agendarService.js";
 //import { consultarAgendamentos } from "./responseApi/consultarAgendamentos.js";
 import { consultarAgendamentosWhatsApp } from "./responseApi/consultarAgendamentosWhatsApp.js";
+import { cancelarAgendamentoWhatsApp } from "./responseApi/cancelarAgendamentoWhatsApp.js";
 //import { Barbearia } from "./atendimento.service.js";
 ///export { Barbearia } from "./responseApi/consultarBarbearia.js"
 //import { type BarbeariaType } from "../type/type.js";
@@ -33,7 +34,6 @@ function menuPrincipal(nomeBarbearia: string): string {
     "2️⃣ Consultar serviços e preços",
     "3️⃣ Consultar meus agendamentos",
     "4️⃣ Cancelar agendamento",
-    "5️⃣ Falar com um atendente",
     "",
     "Digite o número da opção desejada.",
   ].join("\n");
@@ -172,23 +172,188 @@ export async function processarMensagem(
   //  return "❌ O cancelamento será conectado ao sistema na próxima etapa.\n\nDigite MENU para voltar.";
   // }
 
-  if (normalizado === "5" && (!sessao || sessao.etapa === "menu")) {
-    sessoes.set(chaveSessao, {
-      ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
-      etapa: "atendente",
-      barbeiros: [],
-      servicos: [],
-    });
+  // ========================================
+  // OPÇÃO 4 — CANCELAR AGENDAMENTO
+  // ========================================
 
-    return "👋 Você solicitou atendimento humano. Digite MENU para voltar.";
+  if (normalizado === "4" && (!sessao || sessao.etapa === "menu")) {
+    if (!clientePhone) {
+      return "Não consegui identificar seu telefone. Tente novamente.";
+    }
+
+    try {
+      const agendamentos = await consultarAgendamentosWhatsApp(
+        clientePhone,
+        barbeariaId,
+      );
+
+      const agendamentosFiltrados = agendamentos.filter(
+        (s) =>
+          (s.status === "AGUARDANDO" || s.status === "EM_ATENDIMENTO") &&
+          s.tipo === "AGENDAMENTO",
+      );
+
+      if (agendamentosFiltrados.length === 0) {
+        return "📅 Você não possui agendamentos disponiveis para cancelar.\n\nDigite MENU para voltar.";
+      }
+
+      sessoes.set(chaveSessao, {
+        etapa: "escolher_cancelamento",
+        ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
+        barbeiros: [],
+        servicos: [],
+        agendamentosCancelamento: agendamentosFiltrados,
+      });
+
+      const lista = agendamentosFiltrados.map((agend, index) => {
+        const data = new Date(agend.date_agend);
+
+        const dia = data.toLocaleDateString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+        });
+
+        const hora = data.toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        const servicos = agend.services
+          .map((servico) => servico.name)
+          .filter(Boolean)
+          .join(", ");
+
+        return [
+          `*${index + 1}️⃣ Agendamento*`,
+          `📅 ${dia} às ${hora}`,
+          `💈 ${agend.barber_name}`,
+          `✂️ ${servicos || "Serviço não informado"}`,
+        ].join("\n");
+      });
+
+      return [
+        "📋 *Seus agendamentos disponíveis para cancelamento:*",
+        "",
+        lista.join("\n\n"),
+        "",
+        "Digite o número do agendamento que deseja cancelar.",
+        "Ou digite MENU para voltar.",
+      ].join("\n");
+    } catch (erro) {
+      console.error("Erro ao listar agendamentos para cancelamento:", erro);
+
+      return "Não consegui consultar seus agendamentos agora. Tente novamente em instantes.";
+    }
   }
 
   if (!sessao) {
     return "Desculpe, não entendi. Digite MENU para ver as opções.";
   }
 
-  if (sessao.etapa === "atendente") {
-    return "Sua solicitação de atendimento humano está registrada nesta conversa de teste. Digite MENU para voltar.";
+  // ========================================
+  // ESCOLHER AGENDAMENTO PARA CANCELAR
+  // ========================================
+
+  if (sessao.etapa === "escolher_cancelamento") {
+    const indice = Number(texto) - 1;
+
+    const agendamentos = sessao.agendamentosCancelamento ?? [];
+
+    if (
+      !Number.isInteger(indice) ||
+      indice < 0 ||
+      indice >= agendamentos.length
+    ) {
+      return "Escolha um número válido da lista ou digite MENU para voltar.";
+    }
+
+    const agendamento = agendamentos[indice];
+
+    if (!agendamento) {
+      return "Agendamento não encontrado. Digite MENU para voltar.";
+    }
+
+    sessao.etapa = "confirmar_cancelamento";
+    sessao.agendamentoCancelarId = agendamento.id;
+
+    sessoes.set(chaveSessao, sessao);
+
+    const data = new Date(agendamento.date_agend);
+
+    const dia = data.toLocaleDateString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+    });
+
+    const hora = data.toLocaleTimeString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return [
+      "⚠️ *Confirmação de cancelamento*",
+      "",
+      `📅 Data: ${dia}`,
+      `🕒 Horário: ${hora}`,
+      `💈 Barbeiro: ${agendamento.barber_name}`,
+      "",
+      "Tem certeza que deseja cancelar este agendamento?",
+      "",
+      "Digite *SIM* para confirmar.",
+      "Digite *NÃO* para desistir.",
+    ].join("\n");
+  }
+
+  // ========================================
+  // CONFIRMAR CANCELAMENTO
+  // ========================================
+
+  if (sessao.etapa === "confirmar_cancelamento") {
+    if (normalizado === "não" || normalizado === "nao") {
+      sessoes.set(chaveSessao, {
+        etapa: "menu",
+        ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
+        barbeiros: [],
+        servicos: [],
+      });
+
+      return "✅ Cancelamento desfeito. Seu agendamento continua confirmado.\n\nDigite MENU para voltar.";
+    }
+
+    if (normalizado !== "sim") {
+      return "Responda *SIM* para cancelar ou *NÃO* para desistir.";
+    }
+
+    if (!sessao.agendamentoCancelarId || !clientePhone) {
+      return "Não consegui identificar o agendamento. Digite MENU e tente novamente.";
+    }
+
+    try {
+      await cancelarAgendamentoWhatsApp(
+        sessao.agendamentoCancelarId,
+        barbeariaId,
+        clientePhone,
+      );
+
+      sessoes.set(chaveSessao, {
+        etapa: "menu",
+        ...(clienteIdAtual ? { clienteId: clienteIdAtual } : {}),
+        barbeiros: [],
+        servicos: [],
+      });
+
+      return [
+        "✅ *Agendamento cancelado com sucesso!*",
+        "",
+        "O horário foi liberado para novos agendamentos.",
+        "",
+        "Digite MENU para voltar.",
+      ].join("\n");
+    } catch (erro) {
+      console.error("Erro ao cancelar agendamento:", erro);
+
+      return "❌ Não consegui confirmar o cancelamento agora. Seu agendamento pode ainda estar ativo.\n\nDigite MENU para consultar novamente antes de tentar cancelar.";
+    }
   }
 
   if (sessao.etapa === "escolher_barbeiro") {
@@ -318,9 +483,9 @@ export async function processarMensagem(
     const dataValidada = new Date(`${data}T12:00:00-03:00`);
 
     if (
-      dataValidada.getFullYear() !== ano ||
-      dataValidada.getMonth() + 1 !== mes ||
-      dataValidada.getDate() !== dia
+      dataValidada.getUTCFullYear() !== ano ||
+      dataValidada.getUTCMonth() + 1 !== mes ||
+      dataValidada.getUTCDate() !== dia
     ) {
       return "Essa data não é válida. Informe outra data no formato DD/MM/AAAA.";
     }
@@ -527,7 +692,18 @@ export async function processarMensagem(
         return "📅 Você não possui agendamentos cadastrados.\n\nDigite MENU para ver as opções disponíveis.";
       }
 
-      const lista = agendamentosCliente.map((agend, index) => {
+      const agendamentosFiltrados = agendamentosCliente.filter(
+        (agend) =>
+          (agend.status === "AGUARDANDO" ||
+            agend.status === "EM_ATENDIMENTO") &&
+          agend.tipo === "AGENDAMENTO",
+      );
+
+      if (agendamentosFiltrados.length === 0) {
+        return "📅 Você não possui agendamentos em aberto.\n\nDigite MENU para voltar.";
+      }
+
+      const lista = agendamentosFiltrados.map((agend, index) => {
         const data = new Date(agend.date_agend);
 
         const dataFormatada = data.toLocaleDateString("pt-BR", {

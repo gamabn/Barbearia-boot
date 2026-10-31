@@ -33,6 +33,12 @@ export async function garantirCliente(
 
   const resposta = await fetch(urlConsulta);
 
+  if (resposta.status === 403) {
+    throw new Error(
+      "ASSINATURA_INATIVA: Esta barbearia está temporariamente indisponível.",
+    );
+  }
+
   let clienteExistente: Cliente | null = null;
 
   if (resposta.ok) {
@@ -74,6 +80,12 @@ export async function garantirCliente(
   });
 
   const corpo = await cadastro.text();
+
+  if (cadastro.status === 403) {
+    throw new Error(
+      "ASSINATURA_INATIVA: Esta barbearia está temporariamente indisponível.",
+    );
+  }
 
   if (!cadastro.ok) {
     throw new Error(

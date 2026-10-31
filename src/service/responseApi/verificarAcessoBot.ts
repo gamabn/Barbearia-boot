@@ -7,12 +7,12 @@ export async function verificarAcessoBot(
   // const apiUrl = process.env.API_URL;
   const token = process.env.BOT_SERVICE_TOKEN;
 
-  if (!apiUrl || !token) {
+  if (!urlHost || !token) {
     throw new Error("Configuração de acesso ao backend ausente.");
   }
 
   const response = await fetch(
-    `${apiUrl.replace(/\/$/, "")}/bot/access/${encodeURIComponent(barbeariaId)}`,
+    `${urlHost.replace(/\/$/, "")}/bot/access/${encodeURIComponent(barbeariaId)}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
