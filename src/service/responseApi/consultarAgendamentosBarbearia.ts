@@ -4,7 +4,7 @@ import type { AgendamentoRetornado } from "./consultarAgendamentos.js";
 export async function consultarAgendamentosBarbearia(
   barbeariaId: string,
 ): Promise<AgendamentoRetornado[]> {
-  const { urlHost, apiUrl } = obterConfiguracao();
+  const { apiUrl } = obterConfiguracao();
 
   if (!barbeariaId) {
     throw new Error("ID da barbearia não informado.");

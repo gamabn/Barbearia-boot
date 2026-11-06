@@ -5,7 +5,7 @@ export async function cancelarAgendamentoWhatsApp(
   barbeariaId: string,
   clientePhone: string,
 ): Promise<void> {
-  const { urlHost, apiUrl } = obterConfiguracao();
+  const { apiUrl } = obterConfiguracao();
   const token = process.env.BOT_SERVICE_TOKEN;
 
   if (!token) {

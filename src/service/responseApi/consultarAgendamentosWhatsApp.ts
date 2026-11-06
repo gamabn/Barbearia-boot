@@ -5,7 +5,7 @@ export async function consultarAgendamentosWhatsApp(
   clientPhone: string,
   barbeariaId: string,
 ): Promise<AgendamentoRetornado[]> {
-  const { urlHost, apiUrl } = obterConfiguracao();
+  const { apiUrl } = obterConfiguracao();
 
   if (!clientPhone || !barbeariaId) {
     throw new Error("Telefone e barbearia são obrigatórios.");
